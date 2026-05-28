@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Mi Terreno</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;background:#000;color:#fff}
+#map{position:fixed;inset:0;z-index:0}
+
+/* TOP BAR */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:500;background:rgba(0,0,0,0.7);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.1)}
+.topbar h1{font-size:17px;font-weight:700;letter-spacing:-0.3px}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.zone-count{font-size:13px;color:rgba(255,255,255,0.5)}
+
+/* BOTTOM NAV */
+.bottomnav{position:fixed;bottom:0;left:0;right:0;z-index:500;background:rgba(0,0,0,0.8);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:flex;border-top:1px solid rgba(255,255,255,0.1);padding-bottom:env(safe-area-inset-bottom,0px)}
+.navbtn{flex:1;padding:10px 8px 8px;background:none;border:none;color:rgba(255,255,255,0.4);font-size:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:inherit;letter-spacing:0.2px}
+.navbtn .icon{font-size:21px;line-height:1}
+.navbtn.active{color:#4cd97b}
+
+/* MAP CONTROLS */
+.map-controls{position:fixed;top:58px;right:12px;z-index:499;display:flex;flex-direction:column;gap:7px}
+.mc-btn{width:40px;height:40px;border-radius:11px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.mc-btn.active{background:rgba(76,217,123,0.25);border-color:#4cd97b}
+.mc-btn:active{opacity:0.7}
+
+/* DRAW TOOLBAR override */
+.leaflet-draw-toolbar a{background-color:rgba(0,0,0,0.7)!important;border-color:rgba(255,255,255,0.2)!important}
+.leaflet-draw-toolbar{display:none}
+
+/* DRAW MODE PANEL */
+.draw-panel{position:fixed;top:58px;left:12px;z-index:499;display:none;flex-direction:column;gap:7px}
+.draw-panel.open{display:flex}
+.dp-btn{padding:8px 14px;border-radius:11px;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;display:flex;align-items:center;gap:6px}
+.dp-btn.active{background:rgba(76,217,123,0.25);border-color:#4cd97b;color:#4cd97b}
+.dp-btn:active{opacity:0.7}
+.dp-label{font-size:11px;color:rgba(255,255,255,0.4);padding:0 4px;text-align:center}
+
+/* GPS BTN */
+.gps-btn{position:fixed;left:14px;bottom:80px;z-index:501;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.2);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gps-btn:active{background:rgba(76,217,123,0.3)}
+
+/* FULL SCREEN PANELS */
+.fullpanel{position:fixed;inset:0;top:53px;bottom:65px;z-index:400;background:#000;display:none;overflow-y:auto}
+.fullpanel.open{display:block}
+
+/* AREA DETAIL SHEET */
+.sheet{position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.55);display:none;align-items:flex-end}
+.sheet.open{display:flex}
+.sheet-inner{background:#1c1c1e;border-radius:24px 24px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding:0 0 calc(20px + env(safe-area-inset-bottom,0px))}
+.sheet-handle-bar{padding:14px 0 0;display:flex;justify-content:center}
+.sheet-handle{width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px}
+.sheet-head{padding:14px 18px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08)}
+.sheet-title{font-size:17px;font-weight:700}
+.sheet-close{background:none;border:none;color:rgba(255,255,255,0.4);font-size:26px;cursor:pointer;padding:0 4px;line-height:1}
+.sheet-body{padding:14px 18px}
+
+/* FORM ELEMENTS */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.6px;font-weight:600}
+.field input,.field select,.field textarea{width:100%;padding:11px 13px;border:1px solid rgba(255,255,255,0.1);border-radius:12px;font-size:15px;background:#2c2c2e;color:#fff;font-family:inherit;-webkit-appearance:none}
+.field textarea{height:80px;resize:none}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#4cd97b}
+.field select option{background:#2c2c2e}
+.btn-row{display:flex;gap:10px;margin-top:4px}
+.btn{flex:1;padding:13px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;border:none}
+.btn.cancel{background:#3a3a3c;color:#fff}
+.btn.save{background:#4cd97b;color:#000}
+.btn.danger{background:#3a3a3c;color:#ff453a}
+.btn.ai{background:#bf5af2;color:#fff}
+.btn:active{opacity:0.75}
+
+/* AREA CARDS */
+.content-pad{padding:12px 14px}
+.area-card{background:#1c1c1e;border-radius:16px;padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.area-card:active{opacity:0.8}
+.area-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.aname{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.acolor{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.atag{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;margin-right:4px;margin-top:4px}
+.anote{font-size:13px;color:rgba(255,255,255,0.45);margin-top:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.aphoto-row{display:flex;gap:6px;margin-top:8px;overflow-x:auto}
+.aphoto{width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0}
+.ai-result{background:#1a0d2e;border:1px solid rgba(191,90,242,0.3);border-radius:12px;padding:12px;margin-top:10px;font-size:13px;color:rgba(255,255,255,0.85);line-height:1.5}
+.ai-result-title{font-size:11px;font-weight:700;color:#bf5af2;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+
+/* PHOTOS GRID */
+.photos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.photo-item{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden}
+.photo-item img{width:100%;height:100%;object-fit:cover}
+.photo-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:22px;height:22px;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.add-photo-btn{aspect-ratio:1;border-radius:10px;background:#2c2c2e;border:1.5px dashed rgba(255,255,255,0.2);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.3);gap:4px}
+.add-photo-btn span{font-size:24px}
+
+/* STATS */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;padding:12px 14px 0}
+.stat{background:#1c1c1e;border-radius:14px;padding:13px 15px}
+.stat-lbl{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:2px}
+.stat-val{font-size:28px;font-weight:700}
+.spanel{background:#1c1c1e;border-radius:14px;padding:15px 16px;margin:0 14px 12px}
+.spanel-title{font-size:12px;font-weight:600;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px}
+.bar-row{margin-bottom:10px}
+.bar-lbl{display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:4px}
+.bar-bg{height:6px;background:rgba(255,255,255,0.07);border-radius:3px}
+.bar-fill{height:6px;border-radius:3px;transition:width 0.5s}
+
+/* TOAST */
+.toast{position:fixed;bottom:85px;left:50%;transform:translateX(-50%);background:rgba(40,40,40,0.95);backdrop-filter:blur(10px);color:#fff;padding:10px 20px;border-radius:20px;font-size:14px;font-weight:500;opacity:0;transition:opacity 0.3s;z-index:999;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+
+/* EMPTY */
+.empty{text-align:center;padding:3rem 1rem;color:rgba(255,255,255,0.25)}
+.empty-icon{font-size:48px;margin-bottom:10px}
+
+/* LOADING */
+.loading{display:flex;align-items:center;gap:8px;font-size:13px;color:#bf5af2;padding:10px 0}
+.spinner{width:16px;height:16px;border:2px solid rgba(191,90,242,0.3);border-top-color:#bf5af2;border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.leaflet-control-attribution{font-size:9px!important;background:rgba(0,0,0,0.5)!important;color:rgba(255,255,255,0.3)!important}
+.leaflet-control-attribution a{color:rgba(255,255,255,0.3)!important}
+.leaflet-draw-guide-dash{display:none!important}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="topbar">
+  <h1>🌿 Mi Terreno</h1>
+  <div class="topbar-right">
+    <span class="zone-count" id="zone-count">0 zonas</span>
+  </div>
+</div>
+
+<!-- MAP LAYER + CONTROLS -->
+<div class="map-controls">
+  <button class="mc-btn active" id="btn-sat" onclick="setLayer('sat')" title="Satélite">🛰</button>
+  <button class="mc-btn" id="btn-map" onclick="setLayer('map')" title="Mapa">🗺</button>
+</div>
+
+<!-- DRAW PANEL -->
+<div class="draw-panel" id="draw-panel">
+  <div class="dp-label">Dibujar zona</div>
+  <button class="dp-btn" id="dp-poly" onclick="startDraw('polygon')">✏️ Polígono</button>
+  <button class="dp-btn" id="dp-rect" onclick="startDraw('rectangle')">⬜ Rectángulo</button>
+  <button class="dp-btn" id="dp-circle" onclick="startDraw('circle')">⭕ Círculo</button>
+  <button class="dp-btn" style="color:#ff453a;border-color:rgba(255,67,58,0.3)" onclick="cancelDraw()">✕ Cancelar</button>
+</div>
+
+<button class="gps-btn" id="gps-btn" onclick="goToMyLocation()">📍</button>
+
+<!-- BOTTOM NAV -->
+<div class="bottomnav">
+  <button class="navbtn active" id="nav-mapa" onclick="showSection('mapa')"><span class="icon">🗺</span>Mapa</button>
+  <button class="navbtn" id="nav-zonas" onclick="showSection('zonas')"><span class="icon">📋</span>Zonas</button>
+  <button class="navbtn" id="nav-resumen" onclick="showSection('resumen')"><span class="icon">📊</span>Resumen</button>
+</div>
+
+<!-- ZONES LIST PANEL -->
+<div class="fullpanel" id="zones-panel">
+  <div class="content-pad" id="zones-list"></div>
+</div>
+
+<!-- SUMMARY PANEL -->
+<div class="fullpanel" id="summary-panel">
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-lbl">Zonas</div><div class="stat-val" id="s-total">0</div></div>
+    <div class="stat"><div class="stat-lbl">Factores</div><div class="stat-val" id="s-factors">0</div></div>
+  </div>
+  <div class="spanel">
+    <div class="spanel-title">Por factor</div>
+    <div id="factor-bars"><p style="color:rgba(255,255,255,0.3);font-size:13px">Sin datos aún</p></div>
+  </div>
+</div>
+
+<!-- DRAW MODE FAB -->
+<button style="position:fixed;right:14px;bottom:80px;z-index:501;width:52px;height:52px;border-radius:50%;background:#4cd97b;border:none;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(76,217,123,0.4);color:#000" id="fab" onclick="toggleDrawPanel()">✏️</button>
+
+<!-- AREA DETAIL SHEET -->
+<div class="sheet" id="area-sheet">
+  <div class="sheet-inner">
+    <div class="sheet-handle-bar"><div class="sheet-handle"></div></div>
+    <div class="sheet-head">
+      <div class="sheet-title" id="sheet-title">Zona</div>
+      <button class="sheet-close" onclick="closeSheet()">×</button>
+    </div>
+    <div class="sheet-body">
+      <div class="field"><label>Nombre de la zona</label><input type="text" id="s-name" placeholder="Ej: Zona norte, Bajo el algarrobo..."></div>
+      <div class="field"><label>Factor principal</label>
+        <select id="s-factor">
+          <option value="humedad">💧 Humedad</option>
+          <option value="viento">💨 Viento</option>
+          <option value="tierra">🪨 Tipo de tierra</option>
+          <option value="luz">☀️ Luz solar</option>
+          <option value="arboles">🌳 Árboles / Vegetación</option>
+          <option value="otro">📝 Otro</option>
+        </select>
+      </div>
+      <div class="field"><label>Descripción</label><input type="text" id="s-value" placeholder="Ej: Alta humedad, Tierra arcillosa..."></div>
+      <div class="field"><label>Observaciones</label><textarea id="s-notes" placeholder="Estado de los árboles, comportamiento del suelo, plagas observadas..."></textarea></div>
+
+      <div class="field">
+        <label>Fotos de la zona</label>
+        <div class="photos-grid" id="photos-grid">
+          <div class="add-photo-btn" onclick="document.getElementById('photo-input').click()"><span>📷</span>Añadir foto</div>
+        </div>
+        <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
+      </div>
+
+      <div id="ai-section" style="display:none">
+        <div class="ai-result" id="ai-result-box">
+          <div class="ai-result-title">🤖 Análisis IA</div>
+          <div id="ai-result-text"></div>
+        </div>
+      </div>
+
+      <div class="btn-row" style="flex-wrap:wrap;gap:8px">
+        <button class="btn save" onclick="saveArea()" style="flex:2;min-width:120px">💾 Guardar</button>
+        <button class="btn ai" onclick="analyseArea()" style="flex:2;min-width:120px">🤖 Analizar con IA</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn danger" onclick="deleteArea()" style="flex:1">🗑 Eliminar zona</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const COLORS=['#4cd97b','#ff6b35','#4da6ff','#ffd60a','#bf5af2','#ff375f','#32d74b','#ff9f0a','#5ac8fa','#ff2d55'];
+const FC={humedad:'#4da6ff',viento:'#4cd97b',tierra:'#ff9f0a',luz:'#ffd60a',arboles:'#32d74b',otro:'#bf5af2'};
+const FL={humedad:'Humedad',viento:'Viento',tierra:'Tierra',luz:'Luz solar',arboles:'Árboles',otro:'Otro'};
+const FI={humedad:'💧',viento:'💨',tierra:'🪨',luz:'☀️',arboles:'🌳',otro:'📝'};
+
+let areas=[];
+try{areas=JSON.parse(localStorage.getItem('terreno_areas_v1')||'[]')}catch(e){}
+let map, satLayer, mapLayer, drawnItems, drawControl;
+let currentSection='mapa', currentAreaId=null, drawMode=null;
+let tempPhotos=[];
+
+// ── MAP INIT ─────────────────────────────────────────────
+function initMap(){
+  map=L.map('map',{zoomControl:false}).setView([39.4835,2.8897],17);
+  satLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19});
+  mapLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19});
+  satLayer.addTo(map);
+  L.control.zoom({position:'topright'}).addTo(map);
+  drawnItems=new L.FeatureGroup().addTo(map);
+  drawControl=new L.Control.Draw({draw:false,edit:{featureGroup:drawnItems}});
+  map.addControl(drawControl);
+  map.on(L.Draw.Event.CREATED,onShapeCreated);
+  renderShapes();
+  updateCount();
+}
+
+function setLayer(l){
+  if(l==='sat'){map.removeLayer(mapLayer);if(!map.hasLayer(satLayer))satLayer.addTo(map);document.getElementById('btn-sat').classList.add('active');document.getElementById('btn-map').classList.remove('active');}
+  else{map.removeLayer(satLayer);if(!map.hasLayer(mapLayer))mapLayer.addTo(map);document.getElementById('btn-map').classList.add('active');document.getElementById('btn-sat').classList.remove('active');}
+}
+
+// ── DRAW ─────────────────────────────────────────────────
+function toggleDrawPanel(){
+  const p=document.getElementById('draw-panel');
+  p.classList.toggle('open');
+}
+
+function startDraw(type){
+  document.getElementById('draw-panel').classList.remove('open');
+  const opts={shapeOptions:{color:'#4cd97b',fillColor:'#4cd97b',fillOpacity:0.18,weight:2}};
+  let handler;
+  if(type==='polygon') handler=new L.Draw.Polygon(map,opts);
+  else if(type==='rectangle') handler=new L.Draw.Rectangle(map,opts);
+  else if(type==='circle') handler=new L.Draw.Circle(map,{...opts,shapeOptions:{...opts.shapeOptions}});
+  drawMode=type;
+  handler.enable();
+  showToast('Dibuja la zona en el mapa. Toca para añadir vértices, doble toca para cerrar.');
+}
+
+function cancelDraw(){
+  document.getElementById('draw-panel').classList.remove('open');
+  map.off(L.Draw.Event.CREATED);
+  map.on(L.Draw.Event.CREATED,onShapeCreated);
+  showToast('Dibujo cancelado');
+}
+
+function onShapeCreated(e){
+  const layer=e.layer;
+  const id=Date.now();
+  const color=COLORS[areas.length%COLORS.length];
+  layer.setStyle({color,fillColor:color,fillOpacity:0.2,weight:2.5});
+  layer.options._areaId=id;
+  drawnItems.addLayer(layer);
+  const geo=layer.toGeoJSON ? layer.toGeoJSON() : null;
+  let center;
+  try{center=layer.getBounds?layer.getBounds().getCenter():layer.getLatLng();}catch(e){center={lat:39.4835,lng:2.8897};}
+  const area={
+    id,name:'Nueva zona '+(areas.length+1),
+    factor:'humedad',value:'',notes:'',
+    color,geo:JSON.stringify(geo),
+    centerLat:center.lat,centerLng:center.lng,
+    photos:[],aiResult:'',
+    date:new Date().toLocaleDateString('es-ES')
+  };
+  areas.push(area);
+  saveData();
+  layer.on('click',()=>openSheet(id));
+  openSheet(id);
+}
+
+function renderShapes(){
+  drawnItems.clearLayers();
+  areas.forEach((a,i)=>{
+    try{
+      const geo=JSON.parse(a.geo);
+      const layer=L.geoJSON(geo,{style:{color:a.color,fillColor:a.color,fillOpacity:0.2,weight:2.5}});
+      layer.eachLayer(l=>{
+        l.options._areaId=a.id;
+        l.on('click',()=>openSheet(a.id));
+        drawnItems.addLayer(l);
+      });
+    }catch(e){}
+  });
+}
+
+// ── SHEET ─────────────────────────────────────────────────
+function openSheet(id){
+  currentAreaId=id;
+  tempPhotos=[];
+  const a=areas.find(z=>z.id===id);
+  if(!a) return;
+  document.getElementById('sheet-title').textContent=a.name||'Zona';
+  document.getElementById('s-name').value=a.name||'';
+  document.getElementById('s-factor').value=a.factor||'humedad';
+  document.getElementById('s-value').value=a.value||'';
+  document.getElementById('s-notes').value=a.notes||'';
+  renderPhotosGrid(a.photos||[]);
+  if(a.aiResult){
+    document.getElementById('ai-result-text').innerHTML=a.aiResult;
+    document.getElementById('ai-section').style.display='block';
+  } else {
+    document.getElementById('ai-section').style.display='none';
+  }
+  document.getElementById('area-sheet').classList.add('open');
+}
+
+function closeSheet(){
+  document.getElementById('area-sheet').classList.remove('open');
+  currentAreaId=null;
+  tempPhotos=[];
+}
+
+function saveArea(){
+  if(!currentAreaId) return;
+  const a=areas.find(z=>z.id===currentAreaId);
+  if(!a) return;
+  a.name=document.getElementById('s-name').value.trim()||a.name;
+  a.factor=document.getElementById('s-factor').value;
+  a.value=document.getElementById('s-value').value.trim();
+  a.notes=document.getElementById('s-notes').value.trim();
+  if(tempPhotos.length) a.photos=[...(a.photos||[]),...tempPhotos];
+  saveData();
+  renderShapes();
+  renderList();
+  document.getElementById('sheet-title').textContent=a.name;
+  showToast('Zona guardada ✓');
+  tempPhotos=[];
+}
+
+function deleteArea(){
+  if(!currentAreaId) return;
+  if(!confirm('¿Eliminar esta zona?')) return;
+  areas=areas.filter(z=>z.id!==currentAreaId);
+  saveData();
+  renderShapes();
+  renderList();
+  closeSheet();
+  showToast('Zona eliminada');
+}
+
+// ── PHOTOS ────────────────────────────────────────────────
+function handlePhotos(e){
+  const files=Array.from(e.target.files);
+  files.forEach(f=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      tempPhotos.push(ev.target.result);
+      const a=areas.find(z=>z.id===currentAreaId);
+      renderPhotosGrid([...(a?a.photos||[]:[]),...tempPhotos]);
+    };
+    r.readAsDataURL(f);
+  });
+  e.target.value='';
+}
+
+function renderPhotosGrid(photos){
+  const grid=document.getElementById('photos-grid');
+  grid.innerHTML='';
+  photos.forEach((src,i)=>{
+    const item=document.createElement('div');
+    item.className='photo-item';
+    item.innerHTML=`<img src="${src}" loading="lazy"><button class="photo-del" onclick="removePhoto(${i})">×</button>`;
+    grid.appendChild(item);
+  });
+  const add=document.createElement('div');
+  add.className='add-photo-btn';
+  add.innerHTML='<span>📷</span>Añadir';
+  add.onclick=()=>document.getElementById('photo-input').click();
+  grid.appendChild(add);
+}
+
+function removePhoto(i){
+  const a=areas.find(z=>z.id===currentAreaId);
+  if(!a) return;
+  const all=[...(a.photos||[]),...tempPhotos];
+  all.splice(i,1);
+  const saved=all.slice(0,a.photos.length-(i<a.photos.length?1:0));
+  a.photos=all.slice(0,(a.photos||[]).length);
+  tempPhotos=all.slice((a.photos||[]).length);
+  a.photos=all.filter((_,idx)=>idx<all.length);
+  a.photos=all;
+  tempPhotos=[];
+  saveData();
+  renderPhotosGrid(a.photos);
+}
+
+// ── AI ANALYSIS ───────────────────────────────────────────
+async function analyseArea(){
+  if(!currentAreaId){showToast('Guarda la zona primero');return;}
+  const a=areas.find(z=>z.id===currentAreaId);
+  if(!a){return;}
+  saveArea();
+
+  const aiBox=document.getElementById('ai-result-box');
+  const aiText=document.getElementById('ai-result-text');
+  const aiSection=document.getElementById('ai-section');
+  aiSection.style.display='block';
+  aiText.innerHTML='<div class="loading"><div class="spinner"></div>Analizando la zona...</div>';
+
+  const messages=[];
+  const contentParts=[];
+
+  contentParts.push({type:'text',text:`Eres un experto agrónomo especializado en terrenos mediterráneos de Mallorca, concretamente en el municipio de Llucmajor. Analiza esta zona del terreno y dame un análisis detallado y práctico.
+
+DATOS DE LA ZONA:
+- Nombre: ${a.name}
+- Factor principal observado: ${FL[a.factor]||a.factor}${a.value?': '+a.value:''}
+- Observaciones del propietario: ${a.notes||'Sin observaciones adicionales'}
+- Fecha del registro: ${a.date}
+- Número de fotos adjuntas: ${(a.photos||[]).length}
+
+Por favor analiza:
+1. **Características del área** según los datos y fotos
+2. **Estado de los árboles** si hay acebuches o algarrobos visibles
+3. **Recomendaciones específicas** para esta zona (riego, poda, transplante, tratamientos)
+4. **Problemas detectados** y cómo resolverlos
+5. **Potencial de la zona** para nuevas plantaciones si procede
+
+Responde en español, de forma clara y práctica. Usa emojis para los puntos principales.`});
+
+  if(a.photos && a.photos.length>0){
+    const photosToSend=a.photos.slice(0,4);
+    photosToSend.forEach(photo=>{
+      const base64=photo.split(',')[1];
+      const mediaType=photo.split(';')[0].split(':')[1]||'image/jpeg';
+      contentParts.push({type:'image',source:{type:'base64',media_type:mediaType,data:base64}});
+    });
+  }
+
+  messages.push({role:'user',content:contentParts});
+
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages})
+    });
+    const data=await resp.json();
+    const text=data.content&&data.content[0]?data.content[0].text:'No se pudo obtener análisis.';
+    const html=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+    aiText.innerHTML=html;
+    a.aiResult=html;
+    saveData();
+  }catch(err){
+    aiText.innerHTML='<span style="color:#ff453a">Error al conectar con la IA. Comprueba la conexión e inténtalo de nuevo.</span>';
+  }
+}
+
+// ── GPS ───────────────────────────────────────────────────
+function goToMyLocation(){
+  if(!navigator.geolocation){alert('Geolocalización no disponible');return;}
+  showToast('Buscando ubicación GPS...');
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const ll=[pos.coords.latitude,pos.coords.longitude];
+    map.setView(ll,18);
+    L.circleMarker(ll,{radius:9,color:'#ff6b35',fillColor:'#ff6b35',fillOpacity:0.9,weight:2}).addTo(map).bindPopup('Tu ubicación').openPopup();
+    showToast('Ubicación encontrada ✓');
+  },()=>{alert('No se pudo obtener la ubicación.\nEn iPhone: Ajustes → Privacidad → Localización → Safari → Permitir');},{enableHighAccuracy:true,timeout:10000});
+}
+
+// ── LIST & SUMMARY ────────────────────────────────────────
+function renderList(){
+  const el=document.getElementById('zones-list');
+  if(!areas.length){el.innerHTML='<div class="empty"><div class="empty-icon">🗺</div>Sin zonas todavía.<br>Ve al mapa, pulsa ✏️ y dibuja un área.</div>';return;}
+  el.innerHTML=areas.map((a,i)=>`
+    <div class="area-card" onclick="openSheet(${a.id});showSection('mapa')">
+      <div class="area-card-header">
+        <div class="aname"><span class="acolor" style="background:${a.color}"></span>${a.name}</div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.3)">${a.date}</span>
+      </div>
+      <span class="atag" style="background:${FC[a.factor]||'#888'}20;color:${FC[a.factor]||'#aaa'}">${FI[a.factor]||''} ${FL[a.factor]||a.factor}${a.value?': '+a.value:''}</span>
+      ${a.notes?`<div class="anote">${a.notes}</div>`:''}
+      ${(a.photos&&a.photos.length)?`<div class="aphoto-row">${a.photos.slice(0,4).map(p=>`<img class="aphoto" src="${p}">`).join('')}</div>`:''}
+      ${a.aiResult?`<div style="font-size:11px;color:#bf5af2;margin-top:6px">🤖 Análisis IA disponible</div>`:''}
+    </div>
+  `).join('');
+}
+
+function renderSummary(){
+  document.getElementById('s-total').textContent=areas.length;
+  const factors=[...new Set(areas.map(a=>a.factor))];
+  document.getElementById('s-factors').textContent=factors.length;
+  const counts={};
+  areas.forEach(a=>{counts[a.factor]=(counts[a.factor]||0)+1;});
+  const el=document.getElementById('factor-bars');
+  if(!areas.length){el.innerHTML='<p style="color:rgba(255,255,255,0.3);font-size:13px">Sin datos aún</p>';return;}
+  el.innerHTML=Object.entries(counts).map(([f,c])=>{
+    const pct=Math.round((c/areas.length)*100);
+    return `<div class="bar-row"><div class="bar-lbl"><span>${FI[f]||''} ${FL[f]||f}</span><span>${c}</span></div><div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${FC[f]||'#888'}"></div></div></div>`;
+  }).join('');
+}
+
+// ── UTILS ─────────────────────────────────────────────────
+function saveData(){
+  try{
+    const toSave=areas.map(a=>({...a,photos:(a.photos||[]).slice(0,8)}));
+    localStorage.setItem('terreno_areas_v1',JSON.stringify(toSave));
+  }catch(e){showToast('⚠️ Almacenamiento lleno. Reduce el número de fotos.');}
+  updateCount();
+}
+
+function updateCount(){
+  document.getElementById('zone-count').textContent=areas.length+(areas.length===1?' zona':' zonas');
+}
+
+function showSection(s){
+  currentSection=s;
+  ['mapa','zonas','resumen'].forEach((sec,i)=>{
+    document.querySelectorAll('.navbtn')[i].classList.toggle('active',sec===s);
+  });
+  document.getElementById('zones-panel').classList.toggle('open',s==='zonas');
+  document.getElementById('summary-panel').classList.toggle('open',s==='resumen');
+  const mapControls=s==='mapa';
+  document.getElementById('fab').style.display=mapControls?'flex':'none';
+  document.querySelector('.gps-btn').style.display=mapControls?'flex':'none';
+  document.querySelector('.map-controls').style.display=mapControls?'flex':'none';
+  if(s==='zonas') renderList();
+  if(s==='resumen') renderSummary();
+  if(s==='mapa') setTimeout(()=>map&&map.invalidateSize(),100);
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+document.addEventListener('DOMContentLoaded',initMap);
+</script>
+</body>
+</html>
